@@ -21,6 +21,11 @@ class MMParams:
     kill_switch_regime: int = 2      # 2 = HIGH
     kill_switch_mode: str = "pause"  # "pause" or "widen"
 
+    # adverse selection (toxic flow proxy)
+    adverse_selection: bool = True
+    tox_med: float = 1.3
+    tox_high: float = 2.0
+
 
 @dataclass
 class MMState:
@@ -66,7 +71,7 @@ def quote_prices(mid: float, regime: int, st: MMState, params: MMParams) -> tupl
     skew = mid * (params.skew_bps_per_unit / 10_000.0) * st.inv
 
     bid = mid - spread / 2.0 - skew
-    ask = mid + spread / 2.0 - skew
+    ask = mid + spread / 2.0 - 0.5 * skew  # skew affects ask less 
 
     return bid, ask, quoting_enabled
 
@@ -81,12 +86,15 @@ def fill_probability(mid: float, quote: float, params: MMParams) -> float:
     return float(np.clip(p, 0.0, 1.0))
 
 
-def step_mm(mid: float, regime: int, st: MMState, params: MMParams, rng: np.random.Generator) -> dict:
+def step_mm(mid: float, mid_next: float, regime: int, st: MMState, params: MMParams, rng: np.random.Generator) -> dict:
     bid, ask, enabled = quote_prices(mid, regime, st, params)
 
     if not enabled:
         # no quoting; equity still moves with mark-to-market
         return {"bid": np.nan, "ask": np.nan, "filled": None}
+    
+    # --- Next-step return (used for adverse selection) ---
+    ret_next = (mid_next - mid) / mid if params.adverse_selection else 0.0
 
     # Enforce inventory cap by disabling the side that would increase exposure
     # If already long near cap, stop bidding; if short near cap, stop offering.
@@ -98,14 +106,43 @@ def step_mm(mid: float, regime: int, st: MMState, params: MMParams, rng: np.rand
     # Try buy fill at bid
     if can_buy:
         p_bid = fill_probability(mid, bid, params)
+
+        # --- Adverse selection (directional toxic flow proxy) ---
+        # If next return is negative, bids are more likely to be hit (bad for going long).
+        if params.adverse_selection:
+            ret_next = (mid_next - mid) / mid
+            tox = 1.0
+            if regime == 2:
+                tox = params.tox_high
+            elif regime == 1:
+                tox = params.tox_med
+
+            if ret_next < 0:
+                p_bid = min(0.95, p_bid * tox)
+
         if rng.random() < p_bid:
             st.inv += 1.0
             st.cash -= bid
             filled = "buy"
 
+
     # Try sell fill at ask
     if can_sell:
         p_ask = fill_probability(mid, ask, params)
+
+        # --- Adverse selection (directional toxic flow proxy) ---
+        # If next return is positive, asks are more likely to be lifted (bad for going short).
+        if params.adverse_selection:
+            ret_next = (mid_next - mid) / mid
+            tox = 1.0
+            if regime == 2:
+                tox = params.tox_high
+            elif regime == 1:
+                tox = params.tox_med
+
+            if ret_next > 0:
+                p_ask = min(0.95, p_ask * tox)
+
         if rng.random() < p_ask:
             st.inv -= 1.0
             st.cash += ask

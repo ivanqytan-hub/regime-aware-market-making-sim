@@ -47,7 +47,8 @@ def run_mm_on_path(prices, regimes, mm_params: MMParams, seed: int = 42):
         mid = prices[t]
         regime = int(regimes[t])
 
-        info = step_mm(mid, regime, state, mm_params, rng)
+        mid_next = prices[t + 1] if t < n_steps - 1 else mid
+        info = step_mm(mid, mid_next, regime, state, mm_params, rng)
 
         inventory.append(state.inv)
         cash.append(state.cash)
