@@ -1,6 +1,6 @@
 # Regime-Aware Market Making Simulator
 
-This project is a market making simulator designed to understand how inventory control and kill-switch logic interact with changing volatility regimes under adverse selection.
+A market making simulator designed to understand how inventory control and kill-switch logic interact with changing volatility regimes under adverse selection.
 
 ## Overview
 
@@ -115,3 +115,40 @@ The market making model simulates adverse selection. When the next period return
 - Fees
 - Cross-venue hedging
 - Predictive alpha signals
+
+## Installation & Usage
+
+### Prerequisites
+- Python 3.8 or higher
+- pip
+
+### Quick Start
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd regime-aware-market-making-sim
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Run the simulator:
+```bash
+python src/simulator.py
+```
+
+Or use the provided run script:
+```bash
+./run.sh
+```
+
+### Expected Output
+
+The simulator will:
+- Print a comparison table showing performance metrics for each kill-switch strategy
+- Display two matplotlib plots:
+  - Equity (MTM) curves comparing all three strategies
+  - Inventory evolution over time
