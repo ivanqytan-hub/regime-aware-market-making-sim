@@ -1,92 +1,117 @@
-# regime-aware-market-making-sim
-This project is a regime-aware market making simulator designed to understand how inventory control and kill-switch logic interact with changing volatility regimes under adverse selection.
+# Regime-Aware Market Making Simulator
 
-The goal is not realism at the microstructure level here, but to isolate and test core control problems faced by market makers.
+This project is a market making simulator designed to understand how inventory control and kill-switch logic interact with changing volatility regimes under adverse selection.
 
-This simulator combines:
+## Overview
+
+The goal is not realism at the microstructure level, but to isolate and test core control problems faced by market makers.
+
+### Key Features
+
 - Markov-switching volatility regimes
-- A simple probabilistic fill model
+- Simple probabilistic fill model
 - Inventory-aware, asymmetric quoting
 - Risk controls (pause vs widen vs no kill switch)
-- A simple Adverse selection proxy
+- Adverse selection proxy
 
-Key Ideas:
+## Core Components
 
-1. Price Process (Markov-Switching GBM)
+### 1. Price Process (Markov-Switching GBM)
 
 Price evolves according to a Geometric Brownian Motion (GBM) whose volatility is governed by a hidden Markov regime:
 
-Regime 0: Low volatility
-Regime 1: Medium volatility
-Regime 2: High volatility
+- **Regime 0:** Low volatility
+- **Regime 1:** Medium volatility
+- **Regime 2:** High volatility
 
-Regimes are persistent (sticky transition matrix) and switch stochastically over time.
+Regimes are persistent (sticky transition matrix) and switch stochastically over time, creating clustered volatility which is critical for testing risk controls.
 
-This creates clustered volatility, which is critical for testing risk controls.
-
-2. Market Making Model
+### 2. Market Making Model
 
 At each timestep, the market maker quotes:
 
-bid = mid - spread/2 - inventory skew
-ask = mid + spread/2 - 0.5 * inventory skew
+```
+bid = mid - spread/2 - inventory_skew
+ask = mid + spread/2 - 0.5 * inventory_skew
+```
 
-Spread widens automatically in higher volatility regimes.
+**Spread behavior:**
+- Widens automatically in higher volatility regimes
 
-Inventory skew is asymmetric. When long, bids are further to discourage buying more and ask moves slightly closer to encourage selling. When short, behavior is the opposite.
+**Inventory skew (asymmetric):**
+- When long: bids move further away to discourage buying, asks move slightly closer to encourage selling
+- When short: opposite behavior
 
-Fills occur probabilistically, with probability decreasing as quotes move further from mid.
+**Fill probability:**
+- Fills occur probabilistically, with probability decreasing as quotes move further from mid
+- Designed to mimic mean reversion of inventory
 
-This aims to mimic mean reversion of inventory.
+### 3. Inventory and PnL
 
-3. Inventory and PnL
-
-The simulator tracks:
+**Tracked metrics:**
 - Inventory units
 - Cash
 - Mark-to-market equity
 
-PnL comes from:
+**PnL sources:**
 - Spread capture
 - Inventory drift
 - Exposure during regime transitions
 
-4. Risk Controls:
+### 4. Risk Controls
 
-Three strategies are compared on the same price path.
+Three strategies are compared on the same price path:
 
-No kill switch: Always quotes
-Pause: Stops quoting entirely in high volatility regime
-Widen: Continues quoting but widens spread in high volatility regime.
+| Strategy | Behavior |
+|----------|----------|
+| **No kill switch** | Always quotes |
+| **Pause** | Stops quoting entirely in high volatility regime |
+| **Widen** | Continues quoting but widens spread in high volatility regime |
 
-5. Modeling Adverse Selection (Toxic Flow)
+### 5. Adverse Selection (Toxic Flow)
 
-The market making model simulates adverse selection. When the next period return moves against the market maker's inventory, the probability of fills on that side is increased.
-This models the intuition that informed traders are more likely to trade with the market maker when prices are about to move unfavorably.
+The market making model simulates adverse selection. When the next period return moves against the market maker's inventory, the probability of fills on that side is increased. This models the intuition that informed traders are more likely to trade with the market maker when prices are about to move unfavorably.
 
-Adverse selection intensity is modeled to be regime-dependent:
-- Low volatility: minimal effect
-- Medium volatility: moderate toxicity
-- High volatility: high toxicity
+**Regime-dependent toxicity:**
+- **Low volatility:** Minimal adverse selection effect
+- **Medium volatility:** Moderate toxicity
+- **High volatility:** High toxicity
 
-Results on example run
-No kill switch     | PnL:    21.80 | MaxDD:    -4.02 | InvStd:   1.38 | InvMaxAbs:  3.0 | %Quoted:  100.0%
-Kill switch: pause | PnL:     0.11 | MaxDD:    -6.96 | InvStd:   1.19 | InvMaxAbs:  3.0 | %Quoted:   74.4%
-Kill switch: widen | PnL:    10.41 | MaxDD:    -2.63 | InvStd:   1.10 | InvMaxAbs:  3.0 | %Quoted:  100.0%
+## Results
 
-6. Insights
+### Example Run Performance
 
-No kill switch: Highest PnL but highest risk. Have to deal with inventory volatility and meaningful drawdown.
+| Strategy | PnL | Max Drawdown | Inv Std | Inv Max (Abs) | % Quoted |
+|----------|-----|--------------|---------|---------------|----------|
+| **No kill switch** | 21.80 | -4.02 | 1.38 | 3.0 | 100.0% |
+| **Pause** | 0.11 | -6.96 | 1.19 | 3.0 | 74.4% |
+| **Widen** | 10.41 | -2.63 | 1.10 | 3.0 | 100.0% |
 
-Pause: Stopping quotes in high volatility avoids toxic flow but doesn't capture profit, inventory gets stuck (risk exists) while PnL stagnates.
+### Key Insights
 
-Widen: Staying in the market but widening spread in high volatility gives best balance of PnL and drawdown, and lowest inventory volatility.
+**No kill switch:**
+- Highest PnL (21.80) but highest risk
+- Must deal with inventory volatility and meaningful drawdown (-4.02)
+- Always in the market
 
-7. Scope and Limitations
+**Pause:**
+- Lowest PnL (0.11) with worst drawdown (-6.96)
+- Avoids toxic flow during high volatility but doesn't capture profit
+- Inventory gets stuck (risk exists) while PnL stagnates
+- Only quotes 74.4% of the time
 
-Intentionally not modeled:
+**Widen (Best risk-adjusted strategy):**
+- Balanced PnL (10.41) with lowest drawdown (-2.63)
+- Lowest inventory volatility (1.10)
+- Stays in the market 100% of the time but with adjusted spreads
+- Best balance between profit capture and risk management
+
+## Scope and Limitations
+
+### Intentionally Not Modeled
+
 - Order book dynamics
 - Latency and cancellations
 - Fees
-- Cross-venue Hedging
+- Cross-venue hedging
 - Predictive alpha signals
